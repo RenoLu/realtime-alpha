@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Data / model artifacts (never commit real data or trained models)
+data/
+output/
+*.parquet
+*.duckdb
+*.npz
+*.pkl
+*.joblib
+models/*.bin
+
+# Frontend
+node_modules/
+frontend/dist/
+
+# Rust
+gateway-rs/target/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

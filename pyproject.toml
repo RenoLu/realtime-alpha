@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "realtime-alpha"
+version = "0.1.0"
+description = "Real-time AI market-prediction platform: live crypto data -> streaming features -> pluggable prediction strategies -> a self-grading accuracy leaderboard."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+authors = [{ name = "Yan Lu" }]
+dependencies = []
+
+# Install only what a given service needs; the core seams (types, bus-memory,
+# strategies) depend on the stdlib alone so they stay importable everywhere.
+[project.optional-dependencies]
+ingest = ["httpx>=0.27", "websockets>=13"]
+stream = ["aiokafka>=0.11", "bytewax>=0.21"]
+serve = ["fastapi>=0.115", "uvicorn[standard]>=0.32", "websockets>=13", "prometheus-client>=0.21"]
+ml = ["numpy>=1.26", "polars>=1.0", "scikit-learn>=1.5", "lightgbm>=4.5"]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.7"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/realtime_alpha"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
