@@ -48,10 +48,12 @@ live deployed product on real-world data.
 
 ## Quickstart
 
+Requires **Python 3.12** (the Bytewax stream processor caps at cp312 wheels):
+
 ```bash
-python -m venv .venv && .venv/Scripts/activate   # Windows; macOS/Linux: source .venv/bin/activate
-pip install -e ".[dev]"
-pytest
+uv venv --python 3.12 .venv         # or: py -3.12 -m venv .venv
+uv pip install -e ".[dev,stream,ingest,serve,ml]"
+.venv/Scripts/python -m pytest      # macOS/Linux: .venv/bin/python -m pytest
 ```
 
 Running the full live stack (Redpanda + services) lands in milestone M1.

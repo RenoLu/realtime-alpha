@@ -7,7 +7,8 @@ name = "realtime-alpha"
 version = "0.1.0"
 description = "Real-time AI market-prediction platform: live crypto data -> streaming features -> pluggable prediction strategies -> a self-grading accuracy leaderboard."
 readme = "README.md"
-requires-python = ">=3.12"
+# Pinned to 3.12: Bytewax (the stream processor) ships wheels only through cp312.
+requires-python = ">=3.12,<3.13"
 license = "MIT"
 authors = [{ name = "Yan Lu" }]
 dependencies = []
@@ -16,10 +17,10 @@ dependencies = []
 # strategies) depend on the stdlib alone so they stay importable everywhere.
 [project.optional-dependencies]
 ingest = ["httpx>=0.27", "websockets>=13"]
-# Streaming processor is built in-house on aiokafka (incremental O(1)-per-tick features).
-# Bytewax/Flink are the documented managed scale-up path; Bytewax is omitted here because
-# it has no Python 3.13+ wheels (caps at cp312) and this repo targets 3.14.
-stream = ["aiokafka>=0.11"]
+# Bytewax is the stream-processing engine (Kafka source/sink + stateful operators);
+# aiokafka drives the non-processor services (ingestion, predictor, serving) and the
+# Kinesis-path processor. Bytewax caps at cp312, which is why requires-python is <3.13.
+stream = ["aiokafka>=0.11", "bytewax>=0.21", "confluent-kafka>=2.5"]
 serve = ["fastapi>=0.115", "uvicorn[standard]>=0.32", "websockets>=13", "prometheus-client>=0.21"]
 ml = ["numpy>=1.26", "polars>=1.0", "scikit-learn>=1.5", "lightgbm>=4.5"]
 dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.7"]
