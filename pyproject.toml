@@ -16,7 +16,10 @@ dependencies = []
 # strategies) depend on the stdlib alone so they stay importable everywhere.
 [project.optional-dependencies]
 ingest = ["httpx>=0.27", "websockets>=13"]
-stream = ["aiokafka>=0.11", "bytewax>=0.21"]
+# Streaming processor is built in-house on aiokafka (incremental O(1)-per-tick features).
+# Bytewax/Flink are the documented managed scale-up path; Bytewax is omitted here because
+# it has no Python 3.13+ wheels (caps at cp312) and this repo targets 3.14.
+stream = ["aiokafka>=0.11"]
 serve = ["fastapi>=0.115", "uvicorn[standard]>=0.32", "websockets>=13", "prometheus-client>=0.21"]
 ml = ["numpy>=1.26", "polars>=1.0", "scikit-learn>=1.5", "lightgbm>=4.5"]
 dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.7"]
