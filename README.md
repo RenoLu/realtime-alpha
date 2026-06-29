@@ -72,7 +72,16 @@ realtime-alpha serve --port 8000                 # live pipeline + dashboard
 - `--source ws` uses the exchange WebSocket (needs port 9443 reachable); the default
   REST source pulls the same real market data over HTTPS and works anywhere.
 
-The Bytewax + Kafka/Redpanda topology (docker-compose) is the scale-out path.
+### Run the full streaming stack (Docker)
+
+The production topology: Redpanda + four services (ingestion → Bytewax processor →
+predictor → serving), each from one image, real data flowing through the broker.
+
+```bash
+docker compose up --build
+# dashboard:        http://localhost:8000
+# Redpanda console: http://localhost:8080
+```
 
 ## License
 

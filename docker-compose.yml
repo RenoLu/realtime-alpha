@@ -1,5 +1,16 @@
-# Local development stack. The Fly.io demo mirror uses these same images;
-# AWS production swaps Redpanda for Kinesis via the bus adapter (see infra/aws).
+# Full streaming topology: Redpanda + the four services, each from one app image.
+# Real data flows: ingestion -> trades.raw -> Bytewax processor -> features.out
+# -> predictor -> predictions.out -> serving (WebSocket + dashboard on :8000).
+# Redpanda auto-creates topics on first produce.
+
+x-app: &app
+  build: .
+  image: realtime-alpha:local
+  depends_on:
+    redpanda:
+      condition: service_healthy
+  restart: unless-stopped
+
 services:
   redpanda:
     image: redpandadata/redpanda:v24.2.7
@@ -20,7 +31,7 @@ services:
       test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 12
 
   console:
     image: redpandadata/console:v2.7.2
@@ -32,5 +43,24 @@ services:
       redpanda:
         condition: service_healthy
 
-  # Application services (ingestion, processor, predictor, serving, frontend)
-  # are added as their Dockerfiles land in M1-M5.
+  ingestion:
+    <<: *app
+    command: realtime-alpha ingest --brokers redpanda:9092 --symbols BTCUSDT,ETHUSDT --source rest
+
+  processor:
+    <<: *app
+    command: python -m bytewax.run realtime_alpha.processor.bytewax_app:flow
+    environment:
+      RTA_BROKERS: redpanda:9092
+
+  predictor:
+    <<: *app
+    command: realtime-alpha predict --brokers redpanda:9092 --strategies momentum
+
+  serving:
+    <<: *app
+    command: realtime-alpha serve --host 0.0.0.0 --port 8000
+    environment:
+      RTA_BROKERS: redpanda:9092
+    ports:
+      - "8000:8000"

@@ -70,7 +70,18 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.manager = ConnectionManager()
         app.state.tasks = []
-        if start_pipeline:
+        app.state.bus = None
+        brokers = os.getenv("RTA_BROKERS")
+        if start_pipeline and brokers:
+            # Kafka mode: ingestion/processor/predictor are separate services; serving
+            # just consumes predictions.out from the broker and fans them out.
+            from ..bus.kafka import KafkaBus
+
+            bus = KafkaBus(brokers)
+            app.state.bus = bus
+            app.state.tasks = [asyncio.create_task(broadcast_predictions(bus, app.state.manager))]
+        elif start_pipeline:
+            # Embedded mode: run the whole pipeline in-process over the in-memory bus.
             bus = MemoryBus()
             app.state.bus = bus
             app.state.tasks = [
@@ -84,6 +95,8 @@ def create_app(
         finally:
             for task in app.state.tasks:
                 task.cancel()
+            if app.state.bus is not None and hasattr(app.state.bus, "close"):
+                await app.state.bus.close()
 
     app = FastAPI(title="realtime-alpha", lifespan=lifespan)
     app.add_middleware(
