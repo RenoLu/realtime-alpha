@@ -14,6 +14,7 @@ from __future__ import annotations
 import abc
 import json
 import os
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -149,7 +150,79 @@ class MockClient(ModelClient):
         return self._responder(system, prompt) if self._responder else self._canned
 
 
+_NEUTRAL_SENTIMENT = '{"yhat": 0.0, "confidence": 0.0}'
+_NEUTRAL_DEEP = '{"stance": "neutral", "yhat": 0.0, "confidence": 0.0}'
+_SYMBOL_RE = re.compile(r"Symbol\s+([A-Z0-9]+)")
+
+
+class AgentClient(ModelClient):
+    """A ModelClient backed by agent-authored analysis on disk (no metered API).
+
+    The coding agent reads live context and writes per-symbol verdicts to a JSON file
+    (``{"signals": {"BTCUSDT": {"sentiment": {...}, "deep": {...}}}}``); this client serves
+    them so ``sentiment_llm`` and ``deep_analysis`` run unchanged -- the agent IS the model.
+    The file is re-read every call, so authored refreshes are picked up live; a missing
+    symbol/section falls back to a neutral (inert) verdict.
+
+    Routing is by system-prompt keyword: the sentiment strategy's "microstructure" system
+    gets the sentiment verdict; the deep "head of research"/synthesis system gets the
+    briefing + verdict; the deep analyst reads get a stub (the authored synthesis is what
+    matters).
+    """
+
+    name = "agent"
+
+    def __init__(self, path: str, *, model: str = "agent-claude-opus-4.8") -> None:
+        self.path = path
+        self.model = model
+
+    def _signals(self) -> dict[str, Any]:
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                return json.load(f).get("signals", {})
+        except (OSError, json.JSONDecodeError):
+            return {}
+
+    def complete(
+        self,
+        *,
+        system: str,
+        prompt: str,
+        model: str | None = None,
+        max_tokens: int = 1024,
+        thinking: bool = False,
+    ) -> str:
+        match = _SYMBOL_RE.search(prompt)
+        entry = self._signals().get(match.group(1), {}) if match else {}
+        sys_l = system.lower()
+
+        if "synthesi" in sys_l or "head of research" in sys_l:
+            deep = entry.get("deep")
+            if not deep:
+                return _NEUTRAL_DEEP
+            verdict = {
+                "stance": deep.get("stance", "neutral"),
+                "yhat": deep.get("yhat", 0.0),
+                "confidence": deep.get("confidence", 0.0),
+            }
+            return f"{deep.get('briefing_md', '')}\n\n{json.dumps(verdict)}"
+
+        if "microstructure" in sys_l:
+            sent = entry.get("sentiment")
+            if not sent:
+                return _NEUTRAL_SENTIMENT
+            return json.dumps({"yhat": sent.get("yhat", 0.0), "confidence": sent.get("confidence", 0.0)})
+
+        return "n/a"  # deep analyst reads -> stub; the authored synthesis carries the signal
+
+
 def build_model_client(api_key: str | None = None, *, model: str = HAIKU) -> ModelClient:
-    """Anthropic client when a key is present; otherwise a deterministic mock (key-less CI/dev)."""
+    """Pick the model backend.
+
+    ``RTA_MODEL=agent`` -> agent-authored analysis from ``RTA_AGENT_SIGNALS`` (no API);
+    otherwise the Anthropic client when a key is present, else a deterministic mock.
+    """
+    if os.getenv("RTA_MODEL", "").lower() == "agent":
+        return AgentClient(os.getenv("RTA_AGENT_SIGNALS", "data/agent_signals.json"))
     key = api_key or os.getenv("ANTHROPIC_API_KEY", "")
     return AnthropicClient(key, model=model) if key else MockClient()

@@ -97,6 +97,16 @@ the pipeline running (momentum stays fully live), so CI and key-less local runs 
 sentiment poller and deep chain also run standalone: `realtime-alpha sentiment` /
 `realtime-alpha deep --once`.
 
+**Model backends** (`llm.py`) are pluggable behind one `ModelClient` seam, chosen by env:
+- default: Anthropic API when `ANTHROPIC_API_KEY` is set, else the deterministic mock;
+- `RTA_MODEL=agent`: an **agent-authored** backend — `AgentClient` serves per-symbol
+  verdicts from a JSON file (`RTA_AGENT_SIGNALS`, default `data/agent_signals.json`) so a
+  coding agent can *be* the model when there's no API budget. `sentiment_llm` and
+  `deep_analysis` run unchanged; the file is re-read each call (live refresh); missing
+  entries fall back to neutral. A ready seed lives at `examples/agent_signals.example.json`
+  (`RTA_MODEL=agent RTA_AGENT_SIGNALS=examples/agent_signals.example.json realtime-alpha serve`).
+  Authored analyses are graded by the leaderboard against realized prices like any strategy.
+
 ### The self-grading leaderboard
 
 The outcome evaluator joins every prediction with the price realized once its horizon

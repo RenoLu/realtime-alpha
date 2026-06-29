@@ -1,0 +1,36 @@
+{
+  "authored_by": "claude-opus-4.8 (coding agent, served via AgentClient)",
+  "authored_at": "2026-06-29",
+  "context": {
+    "BTCUSDT": {"price": 60446.60, "chg_1h_pct": 0.37, "chg_4h_pct": 1.16, "range_pos_pct": 79, "rsi_5m": 68, "sentiment": 0.571, "sentiment_n": 14},
+    "ETHUSDT": {"price": 1622.51, "chg_1h_pct": 0.17, "chg_4h_pct": 2.74, "range_pos_pct": 77, "rsi_5m": 62, "sentiment": 1.000, "sentiment_n": 18}
+  },
+  "signals": {
+    "BTCUSDT": {
+      "sentiment": {
+        "yhat": 0.0002,
+        "confidence": 0.45,
+        "note": "Uptrend intact and crowd moderately bullish (+0.57), but RSI(5m) 68 and price at 79% of the 4h range argue the very-near-term move is extended. Small long, low conviction."
+      },
+      "deep": {
+        "stance": "bullish",
+        "yhat": 0.0015,
+        "confidence": 0.5,
+        "briefing_md": "## BTC - cautiously bullish (1h)\n\nPrice **$60,446**, up **+0.37%** on the hour and **+1.16%** over 4h: the short-term trend is intact and buyers hold control. Social sentiment is moderately bullish (StockTwits/Reddit score **+0.57**, n=14).\n\n**The caution.** Price sits at ~79% of its 4-hour range and 5-minute RSI is ~68 - both say the move is extended and near-term upside is limited without a pause. Realized 5m volatility is low (~0.12%), so no expansion is being priced.\n\n**Net.** Lean long into the trend but size down: the setup favors a small continuation, with overbought / range-top risk capping conviction. Fade strength rather than chase."
+      }
+    },
+    "ETHUSDT": {
+      "sentiment": {
+        "yhat": 0.0004,
+        "confidence": 0.5,
+        "note": "Stronger 4h trend than BTC and RSI(5m) 62 not yet stretched, but sentiment is maximally bullish (+1.00, every labeled msg bullish) - a contrarian yellow flag. Small long."
+      },
+      "deep": {
+        "stance": "bullish",
+        "yhat": 0.0025,
+        "confidence": 0.55,
+        "briefing_md": "## ETH - bullish, watch the euphoria (1h)\n\nPrice **$1,622**, **+0.17%** 1h and a strong **+2.74%** over 4h: ETH is the leader here, with a cleaner uptrend than BTC and RSI(5m) ~62 that isn't yet stretched.\n\n**The flag.** Social sentiment is *maximally* bullish (score **+1.00**, n=18 - every labeled message bullish). Unanimous positioning is a contrarian signal; it tends to cluster near local tops. Range position ~77%.\n\n**Net.** Stay with the stronger trend - bullish, slightly higher conviction than BTC - but the euphoric sentiment argues against chasing. Hold the long, ready to fade if momentum stalls."
+      }
+    }
+  }
+}
