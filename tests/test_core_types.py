@@ -2,9 +2,11 @@ from realtime_alpha.core import (
     Alert,
     DeepView,
     FeatureWindow,
+    Outcome,
     Prediction,
     PredictionContext,
     SentimentSnapshot,
+    StrategyStat,
     Tick,
 )
 
@@ -62,6 +64,24 @@ def test_deep_view_round_trip():
         ts=1700, briefing_md="Strong on-chain flows.", model_ver="v1",
     )
     assert DeepView.from_dict(view.to_dict()) == view
+
+
+def test_outcome_round_trip():
+    o = Outcome(
+        symbol="BTCUSDT", strategy_id="momentum", horizon_s=60, yhat=0.001,
+        realized_return=0.0008, hit=True, abs_error=0.0002, confidence=0.7,
+        ref_price=100.0, realized_price=100.08, pred_ts=1000, scored_ts=61000, model_ver="v1",
+    )
+    assert Outcome.from_dict(o.to_dict()) == o
+
+
+def test_strategy_stat_round_trip_and_defaults():
+    s = StrategyStat(
+        strategy_id="ensemble", n=40, dir_acc=0.55, mae=0.0011,
+        mean_confidence=0.5, calibration_gap=-0.05,
+    )
+    assert s.symbol == "*"  # aggregated across symbols by default
+    assert StrategyStat.from_dict(s.to_dict()) == s
 
 
 def test_prediction_context_defaults_empty_and_holds_lookups():

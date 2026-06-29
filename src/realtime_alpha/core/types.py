@@ -200,6 +200,84 @@ class DeepView:
 
 
 @dataclass(frozen=True, slots=True)
+class Outcome:
+    """A prediction scored against the realized price once its horizon elapsed.
+
+    Produced by the outcome evaluator and flowed over ``scores.out``. ``realized_return``
+    is the actual fractional move ``(realized_price - ref_price) / ref_price``; ``hit`` is
+    the directional call (sign match); ``abs_error`` is ``|yhat - realized_return|`` (MAE).
+    """
+
+    symbol: str
+    strategy_id: str
+    horizon_s: int
+    yhat: float
+    realized_return: float
+    hit: bool
+    abs_error: float
+    confidence: float
+    ref_price: float
+    realized_price: float
+    pred_ts: int  # epoch ms the prediction was made
+    scored_ts: int  # epoch ms the realized price was observed
+    model_ver: str = "v0"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "symbol": self.symbol,
+            "strategy_id": self.strategy_id,
+            "horizon_s": self.horizon_s,
+            "yhat": self.yhat,
+            "realized_return": self.realized_return,
+            "hit": self.hit,
+            "abs_error": self.abs_error,
+            "confidence": self.confidence,
+            "ref_price": self.ref_price,
+            "realized_price": self.realized_price,
+            "pred_ts": self.pred_ts,
+            "scored_ts": self.scored_ts,
+            "model_ver": self.model_ver,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(**_filter_known(cls, data))
+
+
+@dataclass(frozen=True, slots=True)
+class StrategyStat:
+    """Rolling accuracy for one strategy (``symbol="*"`` = aggregated across symbols).
+
+    The unit of the live leaderboard: ``dir_acc`` is directional accuracy in [0, 1],
+    ``mae`` the mean absolute return error, ``calibration_gap`` = mean_confidence - dir_acc
+    (positive = over-confident).
+    """
+
+    strategy_id: str
+    n: int
+    dir_acc: float
+    mae: float
+    mean_confidence: float
+    calibration_gap: float
+    symbol: str = "*"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "strategy_id": self.strategy_id,
+            "n": self.n,
+            "dir_acc": self.dir_acc,
+            "mae": self.mae,
+            "mean_confidence": self.mean_confidence,
+            "calibration_gap": self.calibration_gap,
+            "symbol": self.symbol,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(**_filter_known(cls, data))
+
+
+@dataclass(frozen=True, slots=True)
 class PredictionContext:
     """Shared, slow-moving signals passed to every strategy per window.
 

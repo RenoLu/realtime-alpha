@@ -17,9 +17,10 @@ TRADES_RAW = "trades.raw"
 KLINES_RAW = "klines.raw"
 FEATURES_OUT = "features.out"
 PREDICTIONS_OUT = "predictions.out"
+SCORES_OUT = "scores.out"
 ALERTS_OUT = "alerts.out"
 
-ALL_TOPICS = (TRADES_RAW, KLINES_RAW, FEATURES_OUT, PREDICTIONS_OUT, ALERTS_OUT)
+ALL_TOPICS = (TRADES_RAW, KLINES_RAW, FEATURES_OUT, PREDICTIONS_OUT, SCORES_OUT, ALERTS_OUT)
 
 
 @dataclass(frozen=True, slots=True)

@@ -4,9 +4,11 @@ from .types import (
     Alert,
     DeepView,
     FeatureWindow,
+    Outcome,
     Prediction,
     PredictionContext,
     SentimentSnapshot,
+    StrategyStat,
     Tick,
 )
 
@@ -14,8 +16,10 @@ __all__ = [
     "Alert",
     "DeepView",
     "FeatureWindow",
+    "Outcome",
     "Prediction",
     "PredictionContext",
     "SentimentSnapshot",
+    "StrategyStat",
     "Tick",
 ]
