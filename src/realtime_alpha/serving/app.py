@@ -1,0 +1,140 @@
+"""FastAPI app + embedded single-process pipeline.
+
+In embedded mode the app runs the whole pipeline in-process over the in-memory bus —
+live Binance data → features → predictions → WebSocket fan-out — so the dashboard works
+with real data and no broker. (The Bytewax + Kafka topology is the scale-out path.)
+
+``create_app(start_pipeline=False)`` builds the app without the background tasks, for
+route tests.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+
+from ..bus import MemoryBus
+from ..ingestion import binance_rest_trade_stream, binance_trade_stream, run_ingestion
+from ..prediction import run_predictor
+from ..processor import run_feature_processor
+from .broadcaster import broadcast_predictions
+from .ws_hub import ConnectionManager
+
+DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT"]
+DEFAULT_STRATEGIES = ["momentum"]
+DEFAULT_FEATURE_CFG = {"ema_fast": 12, "ema_slow": 26, "rsi_period": 14, "vol_window": 20}
+
+
+def _source_factory(symbols: list[str]) -> AsyncIterator[dict[str, Any]]:
+    """Pick the market-data source. Real data either way; REST is the default because the
+    WS port (:9443) is blocked on some networks."""
+    if os.getenv("RTA_SOURCE", "rest").lower() == "ws":
+        return binance_trade_stream(symbols)
+    return binance_rest_trade_stream(symbols)
+
+
+def create_app(
+    *,
+    symbols: list[str] | None = None,
+    strategy_ids: list[str] | None = None,
+    feature_cfg: dict[str, Any] | None = None,
+    cors_origins: list[str] | None = None,
+    start_pipeline: bool = True,
+) -> FastAPI:
+    symbols = symbols or DEFAULT_SYMBOLS
+    strategy_ids = strategy_ids or DEFAULT_STRATEGIES
+    feature_cfg = feature_cfg or DEFAULT_FEATURE_CFG
+    cors_origins = cors_origins or ["http://localhost:5173", "http://localhost:8000"]
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        app.state.manager = ConnectionManager()
+        app.state.tasks = []
+        if start_pipeline:
+            bus = MemoryBus()
+            app.state.bus = bus
+            app.state.tasks = [
+                asyncio.create_task(run_ingestion(bus, _source_factory(symbols))),
+                asyncio.create_task(run_feature_processor(bus, **feature_cfg)),
+                asyncio.create_task(run_predictor(bus, strategy_ids)),
+                asyncio.create_task(broadcast_predictions(bus, app.state.manager)),
+            ]
+        try:
+            yield
+        finally:
+            for task in app.state.tasks:
+                task.cancel()
+
+    app = FastAPI(title="realtime-alpha", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.get("/health")
+    async def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/api/symbols")
+    async def get_symbols() -> dict[str, list[str]]:
+        return {"symbols": symbols, "strategies": strategy_ids}
+
+    @app.websocket("/ws")
+    async def ws(websocket: WebSocket) -> None:
+        await websocket.accept()
+        manager: ConnectionManager = websocket.app.state.manager
+        manager.connect(websocket)
+        try:
+            while True:
+                await websocket.receive_text()  # ignore client input; wait for disconnect
+        except WebSocketDisconnect:
+            pass
+        finally:
+            manager.disconnect(websocket)
+
+    @app.get("/", response_class=HTMLResponse)
+    async def index() -> str:
+        return _INDEX_HTML
+
+    return app
+
+
+# A zero-build live view so the embedded app is immediately demoable; the React
+# dashboard (frontend/) is the richer version.
+_INDEX_HTML = """<!doctype html>
+<html><head><meta charset="utf-8"><title>realtime-alpha</title>
+<style>
+ body{font:14px system-ui;margin:2rem;background:#0b0e14;color:#e6e6e6}
+ h1{font-size:1.1rem} table{border-collapse:collapse;margin-top:1rem}
+ td,th{border:1px solid #2a2f3a;padding:.4rem .8rem;text-align:right}
+ th{color:#8a93a6;font-weight:600} .up{color:#3fb950} .down{color:#f85149}
+ #status{color:#8a93a6}
+</style></head><body>
+<h1>realtime-alpha &mdash; live predictions</h1>
+<div id="status">connecting&hellip;</div>
+<table><thead><tr><th>symbol</th><th>strategy</th><th>dir</th><th>yhat</th><th>conf</th></tr></thead>
+<tbody id="rows"></tbody></table>
+<script>
+ const rows = {}, tbody = document.getElementById('rows'), status = document.getElementById('status');
+ const ws = new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws');
+ ws.onopen = () => status.textContent = 'connected';
+ ws.onclose = () => status.textContent = 'disconnected';
+ ws.onmessage = (e) => {
+   const m = JSON.parse(e.data); if (m.type !== 'prediction') return;
+   const k = m.symbol + '|' + m.strategy_id;
+   let tr = rows[k]; if (!tr){ tr = rows[k] = tbody.insertRow(); for(let i=0;i<5;i++) tr.insertCell(); }
+   const dir = m.yhat>0?'up':(m.yhat<0?'down':'');
+   tr.cells[0].textContent=m.symbol; tr.cells[1].textContent=m.strategy_id;
+   tr.cells[2].textContent=dir||'flat'; tr.cells[2].className=dir;
+   tr.cells[3].textContent=(+m.yhat).toFixed(6); tr.cells[4].textContent=(+m.confidence).toFixed(2);
+ };
+</script></body></html>"""

@@ -56,7 +56,17 @@ uv pip install -e ".[dev,stream,ingest,serve,ml]"
 .venv/Scripts/python -m pytest      # macOS/Linux: .venv/bin/python -m pytest
 ```
 
-Running the full live stack (Redpanda + services) lands in milestone M1.
+### Run the live demo (embedded, no broker)
+
+The app can run the whole pipeline in one process over the in-memory bus — live Binance
+data → features → predictions → WebSocket — so you can see real predictions immediately:
+
+```bash
+.venv/Scripts/python -m uvicorn realtime_alpha.serving.app:create_app --factory --port 8000
+# open http://localhost:8000  (live prediction table; RTA_SOURCE=ws to use the WebSocket feed)
+```
+
+The Bytewax + Kafka/Redpanda topology (docker-compose) is the scale-out path.
 
 ## License
 
