@@ -1,5 +1,7 @@
 target-version = "py312"
 line-length = 100
+# Vendored third-party code (TradingAgents connectors) — linted upstream, not by us.
+extend-exclude = ["src/realtime_alpha/dataflows"]
 
 [lint]
 select = ["E", "F", "I", "UP", "B", "C4", "SIM"]

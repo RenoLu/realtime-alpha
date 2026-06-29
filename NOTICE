@@ -1,0 +1,14 @@
+realtime-alpha
+Copyright (c) Yan Lu
+
+This product includes software developed by Tauric Research:
+
+  TradingAgents (https://github.com/TauricResearch/TradingAgents)
+  Licensed under the Apache License, Version 2.0.
+  Vendored at commit 85946c2f60768ab2dae23a5a36cd927662feef94.
+
+The market-data / news / social-sentiment connectors under
+`src/realtime_alpha/dataflows/` are derived from TradingAgents'
+`tradingagents/dataflows/` package, with internal imports rewired for this
+project. A copy of the Apache-2.0 license text accompanies that code at
+`src/realtime_alpha/dataflows/LICENSE`.
