@@ -45,4 +45,5 @@ class MomentumStrategy:
             strategy_id=self.id,
             ts=fw.ts,
             model_ver=self._model_ver,
+            ref_price=fw.last_price,
         )

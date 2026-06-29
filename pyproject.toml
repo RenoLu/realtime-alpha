@@ -25,6 +25,9 @@ serve = ["fastapi>=0.115", "uvicorn[standard]>=0.32", "websockets>=13", "prometh
 ml = ["numpy>=1.26", "polars>=1.0", "scikit-learn>=1.5", "lightgbm>=4.5"]
 dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.7"]
 
+[project.scripts]
+realtime-alpha = "realtime_alpha.cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/realtime_alpha"]
 

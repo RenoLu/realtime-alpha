@@ -14,11 +14,13 @@ import asyncio
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from ..bus import MemoryBus
 from ..ingestion import binance_rest_trade_stream, binance_trade_stream, run_ingestion
@@ -38,6 +40,17 @@ def _source_factory(symbols: list[str]) -> AsyncIterator[dict[str, Any]]:
     if os.getenv("RTA_SOURCE", "rest").lower() == "ws":
         return binance_trade_stream(symbols)
     return binance_rest_trade_stream(symbols)
+
+
+def _frontend_dist() -> Path | None:
+    """The built React dashboard, if present (else the app serves the inline page)."""
+    override = os.getenv("RTA_FRONTEND_DIST")
+    candidates = [Path(override)] if override else []
+    candidates.append(Path(__file__).resolve().parents[3] / "frontend" / "dist")
+    for c in candidates:
+        if c.is_dir() and (c / "index.html").exists():
+            return c
+    return None
 
 
 def create_app(
@@ -101,9 +114,16 @@ def create_app(
         finally:
             manager.disconnect(websocket)
 
-    @app.get("/", response_class=HTMLResponse)
-    async def index() -> str:
-        return _INDEX_HTML
+    # Serve the built React dashboard if present; otherwise the zero-build page.
+    # The API/WS routes above are registered first, so they take precedence over the mount.
+    dist = _frontend_dist()
+    if dist is not None:
+        app.mount("/", StaticFiles(directory=str(dist), html=True), name="frontend")
+    else:
+
+        @app.get("/", response_class=HTMLResponse)
+        async def index() -> str:
+            return _INDEX_HTML
 
     return app
 

@@ -81,6 +81,7 @@ class Prediction:
     strategy_id: str
     ts: int  # epoch ms the prediction was made
     model_ver: str = "v0"
+    ref_price: float = 0.0  # price at prediction time; the evaluator scores against it
 
     @property
     def direction(self) -> int:
@@ -100,6 +101,7 @@ class Prediction:
             "strategy_id": self.strategy_id,
             "ts": self.ts,
             "model_ver": self.model_ver,
+            "ref_price": self.ref_price,
         }
 
     @classmethod

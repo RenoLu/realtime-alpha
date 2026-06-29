@@ -77,3 +77,7 @@ def test_health_and_symbols_routes():
         body = client.get("/api/symbols").json()
         assert "BTCUSDT" in body["symbols"]
         assert body["strategies"] == ["momentum"]
+
+        index = client.get("/")  # dashboard (built React) or the inline fallback page
+        assert index.status_code == 200
+        assert "realtime-alpha" in index.text

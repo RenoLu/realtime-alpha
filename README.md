@@ -56,15 +56,21 @@ uv pip install -e ".[dev,stream,ingest,serve,ml]"
 .venv/Scripts/python -m pytest      # macOS/Linux: .venv/bin/python -m pytest
 ```
 
-### Run the live demo (embedded, no broker)
+### Run it locally
 
 The app can run the whole pipeline in one process over the in-memory bus — live Binance
-data → features → predictions → WebSocket — so you can see real predictions immediately:
+data → features → predictions → WebSocket → dashboard — so you see real predictions
+immediately, no broker required.
 
 ```bash
-.venv/Scripts/python -m uvicorn realtime_alpha.serving.app:create_app --factory --port 8000
-# open http://localhost:8000  (live prediction table; RTA_SOURCE=ws to use the WebSocket feed)
+(cd frontend && npm install && npm run build)   # build the React dashboard (once)
+realtime-alpha serve --port 8000                 # live pipeline + dashboard
+# open http://localhost:8000
 ```
+
+- Without a frontend build the app still runs and serves a zero-build HTML view.
+- `--source ws` uses the exchange WebSocket (needs port 9443 reachable); the default
+  REST source pulls the same real market data over HTTPS and works anywhere.
 
 The Bytewax + Kafka/Redpanda topology (docker-compose) is the scale-out path.
 

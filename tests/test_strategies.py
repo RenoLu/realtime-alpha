@@ -29,6 +29,12 @@ def test_momentum_predicts_down_when_fast_below_slow():
     assert p.direction == -1
 
 
+def test_momentum_sets_ref_price_to_window_last_price():
+    p = MomentumStrategy().predict(_fw(101.0, 100.0, price=123.0))
+    assert p is not None
+    assert p.ref_price == 123.0
+
+
 def test_momentum_returns_none_without_required_features():
     assert MomentumStrategy().predict(FeatureWindow("BTCUSDT", 1, 100.0, {})) is None
 
