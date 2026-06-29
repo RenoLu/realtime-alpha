@@ -64,3 +64,18 @@ services:
       RTA_BROKERS: redpanda:9092
     ports:
       - "8000:8000"
+
+  # Social-sentiment poller and off-path deep-analysis chain, run as standalone services
+  # (real StockTwits/Reddit; Claude when ANTHROPIC_API_KEY is set, else a deterministic
+  # mock). In the single-process `serve` path these feed the LLM strategies directly; in
+  # this Kafka topology they log their output — distributing sentiment/deep over topics
+  # into the predictor is the next step.
+  sentiment:
+    <<: *app
+    command: realtime-alpha sentiment --symbols BTCUSDT,ETHUSDT --interval 45
+
+  deep:
+    <<: *app
+    command: realtime-alpha deep --symbols BTCUSDT,ETHUSDT --interval 3600
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}

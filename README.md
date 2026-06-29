@@ -37,7 +37,13 @@ live deployed product on real-world data.
 
 - `src/realtime_alpha/core` — shared domain types (Tick, FeatureWindow, Prediction, Alert)
 - `src/realtime_alpha/bus` — message-bus interface + adapters (in-memory, Redpanda/Kafka, Kinesis)
-- `src/realtime_alpha/strategies` — the `Strategy` protocol, registry, and strategy implementations
+- `src/realtime_alpha/strategies` — the `Strategy` protocol, registry, and strategies
+  (`momentum`, `sentiment_llm`, `ensemble`, `deep_analysis`)
+- `src/realtime_alpha/llm` — lean provider-agnostic Claude client (+ deterministic mock)
+- `src/realtime_alpha/sentiment` — social-sentiment poller + per-symbol cache
+- `src/realtime_alpha/deep` — off-path multi-agent deep-analysis chain + scheduler
+- `src/realtime_alpha/dataflows` — vendored market/news/sentiment connectors (from
+  [TradingAgents](https://github.com/TauricResearch/TradingAgents), Apache-2.0)
 - `src/realtime_alpha/ingestion` — Binance WebSocket / REST ingestion
 - `src/realtime_alpha/processor` — Bytewax streaming feature computation
 - `src/realtime_alpha/prediction` — runs enabled strategies per feature window
@@ -72,6 +78,25 @@ realtime-alpha serve --port 8000                 # live pipeline + dashboard
 - `--source ws` uses the exchange WebSocket (needs port 9443 reachable); the default
   REST source pulls the same real market data over HTTPS and works anywhere.
 
+### Strategies & the AI layer
+
+Every feature window is scored by all enabled strategies; the live leaderboard grades them
+against realized outcomes. The default lineup:
+
+- **`momentum`** — zero-cost EMA-spread baseline.
+- **`sentiment_llm`** — one cheap Claude Haiku call over the features + cached social
+  sentiment (StockTwits/Reddit), memoized per snapshot so the hot-path cost stays bounded.
+- **`ensemble`** — confidence-weighted blend of the other strategies.
+- **`deep_analysis`** — serves a standing view from an off-path, hourly multi-agent chain
+  (3 Haiku analyst reads + 1 Opus bull/bear synthesis) that also emits a natural-language
+  briefing shown on each dashboard card.
+
+The LLM strategies need the `sentiment` extra (`uv pip install -e ".[sentiment]"`) and an
+`ANTHROPIC_API_KEY`. **Without a key they degrade gracefully** — a deterministic mock keeps
+the pipeline running (momentum stays fully live), so CI and key-less local runs work. The
+sentiment poller and deep chain also run standalone: `realtime-alpha sentiment` /
+`realtime-alpha deep --once`.
+
 ### Run the full streaming stack (Docker)
 
 The production topology: Redpanda + four services (ingestion → Bytewax processor →
@@ -85,4 +110,6 @@ docker compose up --build
 
 ## License
 
-MIT
+MIT. The connectors under `src/realtime_alpha/dataflows/` are vendored from
+[TauricResearch/TradingAgents](https://github.com/TauricResearch/TradingAgents)
+(Apache-2.0); see [`NOTICE`](NOTICE) and the license alongside that code.

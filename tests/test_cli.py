@@ -14,3 +14,18 @@ def test_serve_parser_overrides():
     assert args.host == "0.0.0.0"
     assert args.port == 9001
     assert args.source == "ws"
+
+
+def test_sentiment_parser_defaults():
+    args = build_parser().parse_args(["sentiment"])
+    assert args.command == "sentiment"
+    assert args.symbols == "BTCUSDT,ETHUSDT"
+    assert args.interval == 45.0
+    assert args.once is False
+
+
+def test_deep_parser_defaults():
+    args = build_parser().parse_args(["deep"])
+    assert args.command == "deep"
+    assert args.symbols == "BTCUSDT,ETHUSDT"
+    assert args.once is False

@@ -51,9 +51,34 @@ export function SymbolCard({ s }: { s: SymbolState }) {
         })}
       </div>
 
+      {s.briefing && <Briefing b={s.briefing} />}
+
       <div className="mt-3 text-right text-xs text-slate-600">
         horizon {strategies[0]?.horizon_s ?? 60}s
       </div>
     </div>
+  );
+}
+
+const STANCE_STYLE: Record<string, string> = {
+  bullish: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+  bearish: "bg-rose-500/15 text-rose-300 ring-rose-500/30",
+  neutral: "bg-slate-500/15 text-slate-300 ring-slate-500/30",
+};
+
+function Briefing({ b }: { b: import("../types").BriefingMsg }) {
+  const style = STANCE_STYLE[b.stance] ?? STANCE_STYLE.neutral;
+  return (
+    <details className="mt-4 border-t border-slate-800 pt-3">
+      <summary className="flex cursor-pointer list-none items-center justify-between text-sm">
+        <span className="text-slate-400">deep analysis</span>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase ring-1 ${style}`}>
+          {b.stance}
+        </span>
+      </summary>
+      <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-slate-400">
+        {b.briefing_md}
+      </p>
+    </details>
   );
 }

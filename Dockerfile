@@ -17,7 +17,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install -e ".[stream,ingest,serve]"
+RUN pip install -e ".[stream,ingest,serve,sentiment]"
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 EXPOSE 8000
 # compose sets the command per service (ingest / processor / predict / serve)

@@ -39,7 +39,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     predict = sub.add_parser("predict", help="Run strategies on features -> predictions (Kafka service).")
     predict.add_argument("--brokers", default="localhost:9092")
-    predict.add_argument("--strategies", default="momentum", help="comma-separated strategy ids")
+    predict.add_argument(
+        "--strategies",
+        default="momentum",
+        help="comma-separated strategy ids (the full LLM lineup runs in embedded `serve`)",
+    )
+
+    sentiment = sub.add_parser("sentiment", help="Poll real social sentiment per symbol (standalone).")
+    sentiment.add_argument("--symbols", default="BTCUSDT,ETHUSDT", help="comma-separated symbols")
+    sentiment.add_argument("--interval", type=float, default=45.0, help="seconds between polls")
+    sentiment.add_argument("--once", action="store_true", help="poll one round then exit")
+
+    deep = sub.add_parser("deep", help="Run the off-path deep-analysis chain per symbol (standalone).")
+    deep.add_argument("--symbols", default="BTCUSDT,ETHUSDT", help="comma-separated symbols")
+    deep.add_argument("--interval", type=float, default=3600.0, help="seconds between runs")
+    deep.add_argument("--once", action="store_true", help="run one round then exit")
 
     return parser
 
@@ -52,6 +66,65 @@ def main(argv: list[str] | None = None) -> None:
         _ingest(args)
     elif args.command == "predict":
         _predict(args)
+    elif args.command == "sentiment":
+        _sentiment(args)
+    elif args.command == "deep":
+        _deep(args)
+
+
+def _symbols(arg: str) -> list[str]:
+    return [s.strip() for s in arg.split(",") if s.strip()]
+
+
+def _sentiment(args: argparse.Namespace) -> None:
+    from .sentiment import SentimentCache, run_sentiment_poller
+
+    symbols = _symbols(args.symbols)
+
+    async def run() -> None:
+        cache = SentimentCache()
+        while True:
+            await run_sentiment_poller(cache, symbols, interval=0.0, max_rounds=1)
+            for sym, snap in cache.snapshot().items():
+                src = ",".join(snap.sources) or "none"
+                print(f"{sym}: score={snap.score:+.3f} n={snap.n} sources={src}")
+            if args.once:
+                return
+            await asyncio.sleep(args.interval)
+
+    asyncio.run(run())
+
+
+def _deep(args: argparse.Namespace) -> None:
+    from .deep import DeepViewCache, run_deep_analysis
+    from .llm import build_model_client
+    from .prediction.context import make_deep_context_provider
+    from .sentiment import SentimentCache, run_sentiment_poller
+
+    symbols = _symbols(args.symbols)
+
+    async def run() -> None:
+        sentiment_cache = SentimentCache()
+        await run_sentiment_poller(sentiment_cache, symbols, interval=0.0, max_rounds=1)
+        ctx_provider = make_deep_context_provider(sentiment_cache=sentiment_cache)
+
+        def on_view(view) -> None:
+            print(
+                f"\n=== {view.symbol} [{view.stance}] "
+                f"yhat={view.yhat:+.4f} conf={view.confidence:.2f} ===\n{view.briefing_md}\n"
+            )
+
+        await run_deep_analysis(
+            DeepViewCache(),
+            symbols,
+            client=build_model_client(),
+            context_provider=ctx_provider,
+            interval=args.interval,
+            max_rounds=1 if args.once else None,
+            on_view=on_view,
+        )
+
+    asyncio.run(run())
 
 
 def _serve(args: argparse.Namespace) -> None:

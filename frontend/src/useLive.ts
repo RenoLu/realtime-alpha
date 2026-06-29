@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ConnStatus, PredictionMsg, SymbolState } from "./types";
+import type { ConnStatus, LiveMsg, SymbolState } from "./types";
 
 const MAX_HISTORY = 60;
 
@@ -25,25 +25,32 @@ export function useLive() {
         if (!closed) reconnectTimer = window.setTimeout(connect, 1500);
       };
       ws.onmessage = (e) => {
-        const m = JSON.parse(e.data) as PredictionMsg;
-        if (m.type !== "prediction") return;
-        setSymbols((prev) => {
-          const cur =
-            prev[m.symbol] ?? { symbol: m.symbol, price: 0, history: [], strategies: {} };
-          const priceChanged = m.ref_price !== cur.price && m.ref_price > 0;
-          const history = priceChanged
-            ? [...cur.history, m.ref_price].slice(-MAX_HISTORY)
-            : cur.history;
-          return {
-            ...prev,
-            [m.symbol]: {
-              ...cur,
-              price: m.ref_price || cur.price,
-              history,
-              strategies: { ...cur.strategies, [m.strategy_id]: m },
-            },
-          };
-        });
+        const m = JSON.parse(e.data) as LiveMsg;
+        if (m.type === "prediction") {
+          setSymbols((prev) => {
+            const cur =
+              prev[m.symbol] ?? { symbol: m.symbol, price: 0, history: [], strategies: {} };
+            const priceChanged = m.ref_price !== cur.price && m.ref_price > 0;
+            const history = priceChanged
+              ? [...cur.history, m.ref_price].slice(-MAX_HISTORY)
+              : cur.history;
+            return {
+              ...prev,
+              [m.symbol]: {
+                ...cur,
+                price: m.ref_price || cur.price,
+                history,
+                strategies: { ...cur.strategies, [m.strategy_id]: m },
+              },
+            };
+          });
+        } else if (m.type === "briefing") {
+          setSymbols((prev) => {
+            const cur =
+              prev[m.symbol] ?? { symbol: m.symbol, price: 0, history: [], strategies: {} };
+            return { ...prev, [m.symbol]: { ...cur, briefing: m } };
+          });
+        }
       };
     }
 
