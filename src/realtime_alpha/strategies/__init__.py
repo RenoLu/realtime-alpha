@@ -7,7 +7,12 @@ register themselves the same way as they land.
 
 from __future__ import annotations
 
-from . import momentum  # noqa: F401  -- import for @register side effect
+from . import (  # noqa: F401  -- import for @register side effect
+    deep_analysis,
+    ensemble,
+    momentum,
+    sentiment_llm,
+)
 from .base import Strategy
 from .registry import enabled_strategies, get_strategy, register, registered_ids
 

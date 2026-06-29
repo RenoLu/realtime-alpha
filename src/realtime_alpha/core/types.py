@@ -131,3 +131,81 @@ class Alert:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
         return cls(**_filter_known(cls, data))
+
+
+@dataclass(frozen=True, slots=True)
+class SentimentSnapshot:
+    """Aggregated social/news sentiment for one symbol at one point in time.
+
+    Produced by the sentiment poller on a slow cadence (sentiment moves slowly), cached,
+    and read by strategies per feature window via the prediction context. ``score`` is a
+    normalized aggregate in [-1, 1]; ``sources`` names the connectors that contributed.
+    """
+
+    symbol: str
+    score: float
+    n: int  # number of samples behind the score
+    ts: int  # epoch ms
+    sources: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "symbol": self.symbol,
+            "score": self.score,
+            "n": self.n,
+            "ts": self.ts,
+            "sources": list(self.sources),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        d = _filter_known(cls, data)
+        if "sources" in d:
+            d["sources"] = tuple(d["sources"])
+        return cls(**d)
+
+
+@dataclass(frozen=True, slots=True)
+class DeepView:
+    """A standing view from the off-path deep (multi-agent) analysis for one symbol.
+
+    Refreshed on a slow schedule (~hourly). Carries a tradeable signal (``yhat`` signed
+    return at ``horizon_s``) plus a human-readable ``briefing_md`` shown on the dashboard.
+    """
+
+    symbol: str
+    stance: str  # "bullish" | "bearish" | "neutral"
+    yhat: float
+    confidence: float
+    horizon_s: int
+    ts: int  # epoch ms
+    briefing_md: str = ""
+    model_ver: str = "v0"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "symbol": self.symbol,
+            "stance": self.stance,
+            "yhat": self.yhat,
+            "confidence": self.confidence,
+            "horizon_s": self.horizon_s,
+            "ts": self.ts,
+            "briefing_md": self.briefing_md,
+            "model_ver": self.model_ver,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        return cls(**_filter_known(cls, data))
+
+
+@dataclass(frozen=True, slots=True)
+class PredictionContext:
+    """Shared, slow-moving signals passed to every strategy per window.
+
+    Built in-process by the predictor from the sentiment/deep caches; not serialized over
+    the bus. Strategies look up their symbol (e.g. ``ctx.sentiment.get(fw.symbol)``).
+    """
+
+    sentiment: dict[str, SentimentSnapshot] = field(default_factory=dict)
+    deep: dict[str, DeepView] = field(default_factory=dict)

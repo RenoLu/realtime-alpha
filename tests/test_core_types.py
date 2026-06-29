@@ -1,4 +1,12 @@
-from realtime_alpha.core import Alert, FeatureWindow, Prediction, Tick
+from realtime_alpha.core import (
+    Alert,
+    DeepView,
+    FeatureWindow,
+    Prediction,
+    PredictionContext,
+    SentimentSnapshot,
+    Tick,
+)
 
 
 def test_prediction_direction_is_sign_of_yhat():
@@ -39,3 +47,28 @@ def test_round_trip_preserves_all_types():
     assert FeatureWindow.from_dict(fw.to_dict()) == fw
     assert Prediction.from_dict(pred.to_dict()) == pred
     assert Alert.from_dict(alert.to_dict()) == alert
+
+
+def test_sentiment_snapshot_round_trip_normalizes_sources_to_tuple():
+    snap = SentimentSnapshot("BTCUSDT", score=0.4, n=12, ts=1700, sources=("reddit", "stocktwits"))
+    restored = SentimentSnapshot.from_dict(snap.to_dict())
+    assert restored == snap
+    assert isinstance(restored.sources, tuple)
+
+
+def test_deep_view_round_trip():
+    view = DeepView(
+        "ETHUSDT", stance="bullish", yhat=0.012, confidence=0.6, horizon_s=3600,
+        ts=1700, briefing_md="Strong on-chain flows.", model_ver="v1",
+    )
+    assert DeepView.from_dict(view.to_dict()) == view
+
+
+def test_prediction_context_defaults_empty_and_holds_lookups():
+    empty = PredictionContext()
+    assert empty.sentiment == {} and empty.deep == {}
+
+    snap = SentimentSnapshot("BTCUSDT", 0.2, 5, 1700)
+    ctx = PredictionContext(sentiment={"BTCUSDT": snap})
+    assert ctx.sentiment.get("BTCUSDT") is snap
+    assert ctx.deep.get("BTCUSDT") is None

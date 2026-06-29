@@ -8,7 +8,7 @@ strategy and a permanent baseline the leaderboard measures everything else again
 
 from __future__ import annotations
 
-from ..core import FeatureWindow, Prediction
+from ..core import FeatureWindow, Prediction, PredictionContext
 from .registry import register
 
 
@@ -29,7 +29,9 @@ class MomentumStrategy:
         self._min_confidence = min_confidence
         self._model_ver = model_ver
 
-    def predict(self, fw: FeatureWindow) -> Prediction | None:
+    def predict(
+        self, fw: FeatureWindow, ctx: PredictionContext | None = None
+    ) -> Prediction | None:
         ema_fast = fw.features.get("ema_fast")
         ema_slow = fw.features.get("ema_slow")
         if ema_fast is None or ema_slow is None or ema_slow == 0:
