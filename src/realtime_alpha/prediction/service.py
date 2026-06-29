@@ -9,11 +9,33 @@ can score each strategy independently for the live leaderboard.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import asyncio
+from collections.abc import Callable, Sequence
 
 from ..bus import FEATURES_OUT, PREDICTIONS_OUT, Bus
-from ..core import FeatureWindow, PredictionContext
-from ..strategies import enabled_strategies
+from ..core import FeatureWindow, Prediction, PredictionContext
+from ..strategies import Strategy, enabled_strategies
+
+
+def predict_all(
+    strategies: Sequence[Strategy],
+    fw: FeatureWindow,
+    ctx: PredictionContext | None,
+) -> list[Prediction]:
+    """Run every strategy on one window, isolating failures.
+
+    A strategy that raises (e.g. an LLM call fails or returns junk) is skipped so it can't
+    take down the predictor; ``None`` signals are dropped.
+    """
+    out: list[Prediction] = []
+    for strategy in strategies:
+        try:
+            prediction = strategy.predict(fw, ctx)
+        except Exception:  # noqa: BLE001 - one bad strategy must not stall the pipeline
+            continue
+        if prediction is not None:
+            out.append(prediction)
+    return out
 
 
 async def run_predictor(
@@ -34,10 +56,11 @@ async def run_predictor(
     async for rec in bus.stream(FEATURES_OUT):
         fw = FeatureWindow.from_dict(rec.value)
         ctx = ctx_provider() if ctx_provider is not None else None
-        for strategy in strategies:
-            prediction = strategy.predict(fw, ctx)
-            if prediction is not None:
-                await bus.send(PREDICTIONS_OUT, fw.symbol, prediction.to_dict())
+        # Strategies are sync and some (the LLM-backed ones) make blocking HTTP calls, so
+        # run them off the event loop to keep ingestion/features/broadcast responsive.
+        predictions = await asyncio.to_thread(predict_all, strategies, fw, ctx)
+        for prediction in predictions:
+            await bus.send(PREDICTIONS_OUT, fw.symbol, prediction.to_dict())
 
         processed += 1
         if max_records is not None and processed >= max_records:

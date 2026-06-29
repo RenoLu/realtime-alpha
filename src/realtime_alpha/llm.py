@@ -124,10 +124,14 @@ class AnthropicClient(ModelClient):
 class MockClient(ModelClient):
     name = "mock"
 
+    # A valid, neutral verdict so a key-less run exercises the LLM strategies end-to-end
+    # (they emit zero-confidence predictions) instead of erroring on an unparseable reply.
+    NEUTRAL = '{"stance": "neutral", "yhat": 0.0, "confidence": 0.0}'
+
     def __init__(
         self,
         *,
-        canned: str = "{}",
+        canned: str = NEUTRAL,
         responder: Callable[[str, str], str] | None = None,
     ) -> None:
         self._canned = canned

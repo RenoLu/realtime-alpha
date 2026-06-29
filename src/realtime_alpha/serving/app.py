@@ -11,9 +11,11 @@ route tests.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -23,14 +25,40 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from ..bus import MemoryBus
+from ..core import DeepView
+from ..deep import DeepViewCache, run_deep_analysis
 from ..ingestion import binance_rest_trade_stream, binance_trade_stream, run_ingestion
+from ..llm import build_model_client
 from ..prediction import run_predictor
+from ..prediction.context import (
+    FeatureCache,
+    make_deep_context_provider,
+    make_prediction_ctx_provider,
+    run_feature_tap,
+)
 from ..processor import run_feature_processor
+from ..sentiment import SentimentCache, run_sentiment_poller
 from .broadcaster import broadcast_predictions
 from .ws_hub import ConnectionManager
 
+
+def _briefing_msg(view: DeepView) -> dict[str, Any]:
+    return {
+        "type": "briefing",
+        "symbol": view.symbol,
+        "stance": view.stance,
+        "yhat": view.yhat,
+        "confidence": view.confidence,
+        "briefing_md": view.briefing_md,
+        "ts": view.ts,
+    }
+
+
 DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT"]
-DEFAULT_STRATEGIES = ["momentum"]
+# momentum (zero-cost baseline) + the TradingAgents-derived strategies. The LLM-backed
+# ones (sentiment_llm, ensemble, deep_analysis) light up when ANTHROPIC_API_KEY is set;
+# key-less they emit zero-confidence predictions (via the deterministic mock client).
+DEFAULT_STRATEGIES = ["momentum", "sentiment_llm", "ensemble", "deep_analysis"]
 DEFAULT_FEATURE_CFG = {"ema_fast": 12, "ema_slow": 26, "rsi_period": 14, "vol_window": 20}
 
 
@@ -40,6 +68,29 @@ def _source_factory(symbols: list[str]) -> AsyncIterator[dict[str, Any]]:
     if os.getenv("RTA_SOURCE", "rest").lower() == "ws":
         return binance_trade_stream(symbols)
     return binance_rest_trade_stream(symbols)
+
+
+def _make_news_fetch() -> Any:
+    """Best-effort recent-news fetch per symbol (vendored Google/yfinance connector).
+
+    Returns "" on any failure (missing deps, rate limit, no yahoo mapping) so the deep
+    analyst degrades gracefully rather than blocking.
+    """
+    from datetime import datetime, timedelta
+
+    from ..sentiment.crypto_symbols import connectors_for
+
+    def fetch(symbol: str) -> str:
+        conn = connectors_for(symbol)
+        if not conn or "yahoo" not in conn:
+            return ""
+        from ..dataflows.yfinance_news import get_news_yfinance
+
+        end = datetime.now(UTC).date()
+        start = end - timedelta(days=2)
+        return get_news_yfinance(conn["yahoo"], start.isoformat(), end.isoformat())
+
+    return fetch
 
 
 def _frontend_dist() -> Path | None:
@@ -81,13 +132,58 @@ def create_app(
             app.state.bus = bus
             app.state.tasks = [asyncio.create_task(broadcast_predictions(bus, app.state.manager))]
         elif start_pipeline:
-            # Embedded mode: run the whole pipeline in-process over the in-memory bus.
+            # Embedded mode: run the whole pipeline in-process over the in-memory bus,
+            # including the sentiment poller + off-path deep-analysis scheduler that feed
+            # the LLM strategies their PredictionContext.
             bus = MemoryBus()
             app.state.bus = bus
+            sentiment_cache = SentimentCache()
+            deep_cache = DeepViewCache()
+            feature_cache = FeatureCache()
+            model_client = build_model_client()
+            ctx_provider = make_prediction_ctx_provider(
+                sentiment_cache=sentiment_cache, deep_cache=deep_cache
+            )
+            # News is opt-in (RTA_ENABLE_NEWS=1): the vendored yfinance connector spawns
+            # internal worker threads that starve the event loop under our concurrency, and
+            # its crypto coverage is thin. The deep analyst degrades cleanly without it
+            # (market + sentiment). Inject a reliable news source here when available.
+            news_fetch = _make_news_fetch() if os.getenv("RTA_ENABLE_NEWS") else None
+            deep_ctx_provider = make_deep_context_provider(
+                feature_cache=feature_cache,
+                sentiment_cache=sentiment_cache,
+                news_fetch=news_fetch,
+            )
+            sentiment_interval = float(os.getenv("RTA_SENTIMENT_INTERVAL", "45"))
+            deep_interval = float(os.getenv("RTA_DEEP_INTERVAL", "3600"))
+            manager = app.state.manager
+            app.state.deep_cache = deep_cache  # so a new WS connection can replay briefings
+            briefing_tasks: set[asyncio.Task] = set()
+            app.state.briefing_tasks = briefing_tasks
+
+            def on_view(view: DeepView) -> None:
+                task = asyncio.create_task(manager.broadcast(_briefing_msg(view)))
+                briefing_tasks.add(task)
+                task.add_done_callback(briefing_tasks.discard)
+
             app.state.tasks = [
                 asyncio.create_task(run_ingestion(bus, _source_factory(symbols))),
                 asyncio.create_task(run_feature_processor(bus, **feature_cfg)),
-                asyncio.create_task(run_predictor(bus, strategy_ids)),
+                asyncio.create_task(run_feature_tap(bus, feature_cache)),
+                asyncio.create_task(
+                    run_sentiment_poller(sentiment_cache, symbols, interval=sentiment_interval)
+                ),
+                asyncio.create_task(
+                    run_deep_analysis(
+                        deep_cache,
+                        symbols,
+                        client=model_client,
+                        context_provider=deep_ctx_provider,
+                        interval=deep_interval,
+                        on_view=on_view,
+                    )
+                ),
+                asyncio.create_task(run_predictor(bus, strategy_ids, ctx_provider=ctx_provider)),
                 asyncio.create_task(broadcast_predictions(bus, app.state.manager)),
             ]
         try:
@@ -119,6 +215,12 @@ def create_app(
         await websocket.accept()
         manager: ConnectionManager = websocket.app.state.manager
         manager.connect(websocket)
+        # Replay the standing deep-analysis briefings so a dashboard opened between hourly
+        # runs sees them immediately instead of waiting for the next refresh.
+        deep_cache = getattr(websocket.app.state, "deep_cache", None)
+        if deep_cache is not None:
+            for view in deep_cache.snapshot().values():
+                await websocket.send_text(json.dumps(_briefing_msg(view)))
         try:
             while True:
                 await websocket.receive_text()  # ignore client input; wait for disconnect
