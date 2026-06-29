@@ -14,7 +14,6 @@ from __future__ import annotations
 import abc
 import json
 import os
-import re
 from collections.abc import Callable
 from typing import Any
 
@@ -30,11 +29,26 @@ class ModelError(RuntimeError):
 
 
 def extract_json(text: str) -> dict[str, Any]:
-    """Tolerantly pull the first JSON object out of a model's text response."""
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if match is None:
+    """Pull the last JSON object out of a model's text response.
+
+    Scans for every position where a balanced object decodes (via ``raw_decode``) and
+    returns the *last* one, so braces appearing earlier in prose (a heading, an example)
+    don't break parsing when the model is told to END with its JSON verdict.
+    """
+    decoder = json.JSONDecoder()
+    found: dict[str, Any] | None = None
+    for i, ch in enumerate(text):
+        if ch != "{":
+            continue
+        try:
+            obj, _ = decoder.raw_decode(text[i:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            found = obj
+    if found is None:
         raise ModelError(f"no JSON object in model output: {text[:120]!r}")
-    return json.loads(match.group(0))
+    return found
 
 
 class ModelClient(abc.ABC):

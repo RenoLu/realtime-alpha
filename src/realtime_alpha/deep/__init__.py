@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .analyst import DeepContext, analyze_symbol
 from .cache import DeepViewCache
+from .scheduler import run_deep_analysis
 
-__all__ = ["DeepViewCache"]
+__all__ = ["DeepContext", "DeepViewCache", "analyze_symbol", "run_deep_analysis"]
