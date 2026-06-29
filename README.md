@@ -97,6 +97,15 @@ the pipeline running (momentum stays fully live), so CI and key-less local runs 
 sentiment poller and deep chain also run standalone: `realtime-alpha sentiment` /
 `realtime-alpha deep --once`.
 
+### The self-grading leaderboard
+
+The outcome evaluator joins every prediction with the price realized once its horizon
+elapses, then a rolling leaderboard ranks each strategy by **live directional accuracy**
+(plus MAE and calibration) — the system honestly grading its own predictions on real data,
+not a cherry-picked backtest. It surfaces on the dashboard scoreboard, over the WebSocket
+(`{type:"leaderboard"}`), and at `GET /api/leaderboard`; a strategy that drops below the
+accuracy floor raises an alert. Standalone evaluator service: `realtime-alpha evaluate`.
+
 ### Run the full streaming stack (Docker)
 
 The production topology: Redpanda + four services (ingestion → Bytewax processor →

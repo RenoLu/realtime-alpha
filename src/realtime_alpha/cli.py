@@ -55,6 +55,11 @@ def build_parser() -> argparse.ArgumentParser:
     deep.add_argument("--interval", type=float, default=3600.0, help="seconds between runs")
     deep.add_argument("--once", action="store_true", help="run one round then exit")
 
+    evaluate = sub.add_parser(
+        "evaluate", help="Score predictions vs realized prices -> scores.out (Kafka service)."
+    )
+    evaluate.add_argument("--brokers", default="localhost:9092")
+
     return parser
 
 
@@ -70,6 +75,15 @@ def main(argv: list[str] | None = None) -> None:
         _sentiment(args)
     elif args.command == "deep":
         _deep(args)
+    elif args.command == "evaluate":
+        _evaluate(args)
+
+
+def _evaluate(args: argparse.Namespace) -> None:
+    from .bus.kafka import KafkaBus
+    from .evaluation import run_evaluator
+
+    asyncio.run(run_evaluator(KafkaBus(args.brokers, group_id="evaluator")))
 
 
 def _symbols(arg: str) -> list[str]:

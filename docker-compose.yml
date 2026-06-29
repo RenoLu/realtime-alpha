@@ -1,7 +1,8 @@
-# Full streaming topology: Redpanda + the four services, each from one app image.
+# Full streaming topology: Redpanda + the services, each from one app image.
 # Real data flows: ingestion -> trades.raw -> Bytewax processor -> features.out
-# -> predictor -> predictions.out -> serving (WebSocket + dashboard on :8000).
-# Redpanda auto-creates topics on first produce.
+# -> predictor -> predictions.out -> evaluator (joins each prediction with the realized
+# price after its horizon) -> scores.out -> serving (WebSocket + dashboard on :8000,
+# live strategy leaderboard). Redpanda auto-creates topics on first produce.
 
 x-app: &app
   build: .
@@ -56,6 +57,10 @@ services:
   predictor:
     <<: *app
     command: realtime-alpha predict --brokers redpanda:9092 --strategies momentum
+
+  evaluator:
+    <<: *app
+    command: realtime-alpha evaluate --brokers redpanda:9092
 
   serving:
     <<: *app

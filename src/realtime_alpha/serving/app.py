@@ -27,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from ..bus import MemoryBus
 from ..core import DeepView
 from ..deep import DeepViewCache, run_deep_analysis
+from ..evaluation import Leaderboard, run_evaluator
 from ..ingestion import binance_rest_trade_stream, binance_trade_stream, run_ingestion
 from ..llm import build_model_client
 from ..prediction import run_predictor
@@ -39,6 +40,7 @@ from ..prediction.context import (
 from ..processor import run_feature_processor
 from ..sentiment import SentimentCache, run_sentiment_poller
 from .broadcaster import broadcast_predictions
+from .leaderboard_feed import leaderboard_msg, run_leaderboard_feed
 from .ws_hub import ConnectionManager
 
 
@@ -130,7 +132,12 @@ def create_app(
 
             bus = KafkaBus(brokers)
             app.state.bus = bus
-            app.state.tasks = [asyncio.create_task(broadcast_predictions(bus, app.state.manager))]
+            leaderboard = Leaderboard()
+            app.state.leaderboard = leaderboard
+            app.state.tasks = [
+                asyncio.create_task(broadcast_predictions(bus, app.state.manager)),
+                asyncio.create_task(run_leaderboard_feed(bus, app.state.manager, leaderboard)),
+            ]
         elif start_pipeline:
             # Embedded mode: run the whole pipeline in-process over the in-memory bus,
             # including the sentiment poller + off-path deep-analysis scheduler that feed
@@ -157,7 +164,9 @@ def create_app(
             sentiment_interval = float(os.getenv("RTA_SENTIMENT_INTERVAL", "45"))
             deep_interval = float(os.getenv("RTA_DEEP_INTERVAL", "3600"))
             manager = app.state.manager
+            leaderboard = Leaderboard()
             app.state.deep_cache = deep_cache  # so a new WS connection can replay briefings
+            app.state.leaderboard = leaderboard  # ditto for the standings + /api/leaderboard
             briefing_tasks: set[asyncio.Task] = set()
             app.state.briefing_tasks = briefing_tasks
 
@@ -185,6 +194,8 @@ def create_app(
                 ),
                 asyncio.create_task(run_predictor(bus, strategy_ids, ctx_provider=ctx_provider)),
                 asyncio.create_task(broadcast_predictions(bus, app.state.manager)),
+                asyncio.create_task(run_evaluator(bus)),
+                asyncio.create_task(run_leaderboard_feed(bus, manager, leaderboard)),
             ]
         try:
             yield
@@ -210,6 +221,12 @@ def create_app(
     async def get_symbols() -> dict[str, list[str]]:
         return {"symbols": symbols, "strategies": strategy_ids}
 
+    @app.get("/api/leaderboard")
+    async def get_leaderboard() -> dict[str, list[dict[str, Any]]]:
+        lb = getattr(app.state, "leaderboard", None)
+        standings = lb.standings() if lb is not None else []
+        return {"standings": [s.to_dict() for s in standings]}
+
     @app.websocket("/ws")
     async def ws(websocket: WebSocket) -> None:
         await websocket.accept()
@@ -221,6 +238,9 @@ def create_app(
         if deep_cache is not None:
             for view in deep_cache.snapshot().values():
                 await websocket.send_text(json.dumps(_briefing_msg(view)))
+        leaderboard = getattr(websocket.app.state, "leaderboard", None)
+        if leaderboard is not None and (standings := leaderboard.standings()):
+            await websocket.send_text(json.dumps(leaderboard_msg(standings)))
         try:
             while True:
                 await websocket.receive_text()  # ignore client input; wait for disconnect

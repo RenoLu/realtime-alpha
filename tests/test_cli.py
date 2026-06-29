@@ -29,3 +29,9 @@ def test_deep_parser_defaults():
     assert args.command == "deep"
     assert args.symbols == "BTCUSDT,ETHUSDT"
     assert args.once is False
+
+
+def test_evaluate_parser_defaults():
+    args = build_parser().parse_args(["evaluate"])
+    assert args.command == "evaluate"
+    assert args.brokers == "localhost:9092"

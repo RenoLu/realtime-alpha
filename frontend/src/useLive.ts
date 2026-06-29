@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import type { ConnStatus, LiveMsg, SymbolState } from "./types";
+import type { AlertMsg, ConnStatus, LiveMsg, StrategyStat, SymbolState } from "./types";
 
 const MAX_HISTORY = 60;
+const MAX_ALERTS = 5;
 
-/** Subscribe to /ws and accumulate the latest prediction per (symbol, strategy). */
+/** Subscribe to /ws and accumulate predictions, briefings, the leaderboard, and alerts. */
 export function useLive() {
   const [status, setStatus] = useState<ConnStatus>("connecting");
   const [symbols, setSymbols] = useState<Record<string, SymbolState>>({});
+  const [leaderboard, setLeaderboard] = useState<StrategyStat[]>([]);
+  const [alerts, setAlerts] = useState<AlertMsg[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -50,6 +53,10 @@ export function useLive() {
               prev[m.symbol] ?? { symbol: m.symbol, price: 0, history: [], strategies: {} };
             return { ...prev, [m.symbol]: { ...cur, briefing: m } };
           });
+        } else if (m.type === "leaderboard") {
+          setLeaderboard(m.standings);
+        } else if (m.type === "alert") {
+          setAlerts((prev) => [m, ...prev].slice(0, MAX_ALERTS));
         }
       };
     }
@@ -62,5 +69,5 @@ export function useLive() {
     };
   }, []);
 
-  return { status, symbols };
+  return { status, symbols, leaderboard, alerts };
 }

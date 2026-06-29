@@ -21,7 +21,32 @@ export interface BriefingMsg {
   ts: number;
 }
 
-export type LiveMsg = PredictionMsg | BriefingMsg;
+/** One row of the live strategy leaderboard. */
+export interface StrategyStat {
+  strategy_id: string;
+  n: number;
+  dir_acc: number; // directional accuracy [0,1]
+  mae: number;
+  mean_confidence: number;
+  calibration_gap: number;
+  symbol: string;
+}
+
+export interface LeaderboardMsg {
+  type: "leaderboard";
+  standings: StrategyStat[];
+}
+
+export interface AlertMsg {
+  type: "alert";
+  symbol: string;
+  kind: string;
+  severity: string;
+  message: string;
+  ts: number;
+}
+
+export type LiveMsg = PredictionMsg | BriefingMsg | LeaderboardMsg | AlertMsg;
 
 export type ConnStatus = "connecting" | "connected" | "disconnected";
 
