@@ -112,12 +112,16 @@ async def _maybe_store() -> Any:
     """
     dsn = os.getenv("RTA_DATABASE_URL")
     if not dsn:
+        print("[store] RTA_DATABASE_URL not set -> in-memory leaderboard", flush=True)
         return None
     try:
         from ..db import OutcomeStore
 
-        return await OutcomeStore.connect(dsn)
-    except Exception:  # noqa: BLE001 - persistence is best-effort
+        store = await OutcomeStore.connect(dsn)
+        print("[store] connected to Postgres -> durable leaderboard", flush=True)
+        return store
+    except Exception as exc:  # noqa: BLE001 - persistence is best-effort
+        print(f"[store] connect failed ({type(exc).__name__}: {exc}) -> in-memory", flush=True)
         return None
 
 
