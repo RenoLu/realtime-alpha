@@ -23,7 +23,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install -e ".[ingest,serve,ml]"
+RUN pip install -e ".[ingest,serve,ml,lakehouse]"
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 # Fail the build early if the app can't import; then train the ml_model (best-effort —
 # if Binance is unreachable at build time, ml_model simply stays inert).

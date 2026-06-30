@@ -105,13 +105,20 @@ def _build_lakehouse_writer() -> Any:
 
 
 async def _maybe_store() -> Any:
-    """An initialized OutcomeStore if RTA_DATABASE_URL is set, else None (DB disabled)."""
+    """An initialized OutcomeStore if RTA_DATABASE_URL is set, else None.
+
+    Resilient: a missing asyncpg or an unreachable DB degrades to in-memory rather than
+    taking down the app, so a DB outage never breaks the live demo.
+    """
     dsn = os.getenv("RTA_DATABASE_URL")
     if not dsn:
         return None
-    from ..db import OutcomeStore
+    try:
+        from ..db import OutcomeStore
 
-    return await OutcomeStore.connect(dsn)
+        return await OutcomeStore.connect(dsn)
+    except Exception:  # noqa: BLE001 - persistence is best-effort
+        return None
 
 
 def _frontend_dist() -> Path | None:
