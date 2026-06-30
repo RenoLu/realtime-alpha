@@ -1,0 +1,34 @@
+# Lean single-process image for Render: the embedded `serve` pipeline (no broker), the
+# React dashboard, and a model trained at build. momentum + ml_model are the live, graded
+# strategies; the LLM strategies stay inert without API credit.
+
+# Stage 1 — build the React dashboard
+FROM node:24-slim AS frontend
+WORKDIR /app/frontend
+COPY frontend/package.json ./
+RUN npm install
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2 — the Python app (only what embedded serve + ml_model need)
+FROM python:3.12-slim
+WORKDIR /app
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    RTA_FRONTEND_DIST=/app/frontend/dist \
+    RTA_SOURCE=rest
+# ca-certificates for HTTPS to Binance.US; libgomp1 is LightGBM's OpenMP runtime.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN pip install -e ".[ingest,serve,ml]"
+COPY --from=frontend /app/frontend/dist ./frontend/dist
+# Fail the build early if the app can't import; then train the ml_model (best-effort —
+# if Binance is unreachable at build time, ml_model simply stays inert).
+RUN python -c "from realtime_alpha.serving.app import create_app; create_app(start_pipeline=False)" \
+    && (realtime-alpha train --limit 600 --out models/ml_model.pkl || echo "train skipped; ml_model inert")
+EXPOSE 8000
+# Render injects $PORT; bind to it.
+CMD ["sh", "-c", "realtime-alpha serve --host 0.0.0.0 --port ${PORT:-8000}"]

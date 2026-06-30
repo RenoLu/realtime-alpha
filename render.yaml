@@ -1,0 +1,16 @@
+# Render Blueprint: the live demo (free tier, embedded single-process serve).
+# Cold-start after the free-tier 15-min sleep is mitigated by a keep-warm ping
+# (.github/workflows/keepwarm.yml). Provision Neon + set RTA_DATABASE_URL to make the
+# leaderboard survive restarts.
+services:
+  - type: web
+    name: realtime-alpha
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    plan: free
+    region: oregon
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: RTA_SOURCE
+        value: rest
