@@ -45,3 +45,9 @@ def test_sink_parser_defaults():
 def test_backtest_parser_defaults():
     args = build_parser().parse_args(["backtest"])
     assert args.command == "backtest" and args.root is None
+
+
+def test_train_parser_defaults():
+    args = build_parser().parse_args(["train"])
+    assert args.command == "train"
+    assert args.symbols == "BTCUSDT,ETHUSDT" and args.limit == 1000 and args.out == "models/ml_model.pkl"

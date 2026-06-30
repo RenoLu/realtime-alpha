@@ -70,6 +70,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     backtest.add_argument("--root", default=None, help="lakehouse root (default: s3://$RTA_R2_BUCKET)")
 
+    train = sub.add_parser(
+        "train", help="Train the ml_model strategy on real klines (walk-forward) -> artifact."
+    )
+    train.add_argument("--symbols", default="BTCUSDT,ETHUSDT", help="comma-separated symbols")
+    train.add_argument("--interval", default="1m")
+    train.add_argument("--limit", type=int, default=1000, help="klines per symbol")
+    train.add_argument("--horizon", type=int, default=1, help="label horizon in bars")
+    train.add_argument("--out", default="models/ml_model.pkl")
+    train.add_argument(
+        "--register", action="store_true", help="record in model_registry (needs RTA_DATABASE_URL)"
+    )
+
     return parser
 
 
@@ -91,6 +103,8 @@ def main(argv: list[str] | None = None) -> None:
         _sink(args)
     elif args.command == "backtest":
         _backtest(args)
+    elif args.command == "train":
+        _train(args)
 
 
 def _evaluate(args: argparse.Namespace) -> None:
@@ -124,6 +138,37 @@ def _backtest(args: argparse.Namespace) -> None:
     print(f"{'strategy':16s} {'dir_acc':>8s} {'mae':>9s} {'n':>7s}")
     for r in rows:
         print(f"{r['strategy_id']:16s} {r['dir_acc'] * 100:7.1f}% {r['mae'] * 100:8.3f}% {r['n']:7d}")
+
+
+def _train(args: argparse.Namespace) -> None:
+    from .ml.train import save_artifact, train_model
+
+    symbols = _symbols(args.symbols)
+    model, cols, metrics = train_model(
+        symbols, interval=args.interval, limit=args.limit, horizon=args.horizon
+    )
+    save_artifact(model, cols, args.out, model_ver="ml-v1", metrics=metrics)
+    acc = metrics["oos_dir_acc"]
+    acc_str = f"{acc * 100:.1f}%" if acc is not None else "n/a"
+    print(f"trained on {metrics['n']} samples; walk-forward OOS dir-acc {acc_str} (folds {metrics['folds']})")
+    print(f"saved -> {args.out}")
+    if args.register:
+        if not os.getenv("RTA_DATABASE_URL"):
+            raise SystemExit("--register needs RTA_DATABASE_URL")
+        import time
+
+        from .db import OutcomeStore
+
+        async def _register() -> None:
+            store = await OutcomeStore.connect(os.environ["RTA_DATABASE_URL"])
+            await store.register_model(
+                name="ml_model", version="ml-v1", kind="lightgbm", metrics=metrics,
+                artifact_uri=args.out, ts=int(time.time() * 1000),
+            )
+            await store.close()
+
+        asyncio.run(_register())
+        print("registered in model_registry")
 
 
 def _symbols(arg: str) -> list[str]:
@@ -186,6 +231,11 @@ def _serve(args: argparse.Namespace) -> None:
 
     if args.source:
         os.environ["RTA_SOURCE"] = args.source
+    # Auto-activate a trained ml_model if its artifact is present and no path was set.
+    from pathlib import Path
+
+    if not os.getenv("RTA_MODEL_PATH") and Path("models/ml_model.pkl").exists():
+        os.environ["RTA_MODEL_PATH"] = "models/ml_model.pkl"
     uvicorn.run(
         "realtime_alpha.serving.app:create_app",
         factory=True,

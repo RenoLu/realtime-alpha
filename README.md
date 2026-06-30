@@ -90,6 +90,12 @@ against realized outcomes. The default lineup:
 - **`deep_analysis`** — serves a standing view from an off-path, hourly multi-agent chain
   (3 Haiku analyst reads + 1 Opus bull/bear synthesis) that also emits a natural-language
   briefing shown on each dashboard card.
+- **`ml_model`** — a **trained LightGBM classifier** on the streaming features.
+  `realtime-alpha train` pulls real 1-minute klines, runs them through the *same*
+  FeatureEngine the live pipeline uses, labels each bar by its next-bar return, and reports
+  **walk-forward out-of-sample** directional accuracy (an honest backtest, not a fit-to-all
+  score) before pickling the artifact to `models/`. `serve` auto-loads it if present (else
+  the strategy is inert). First run: ~57% OOS directional accuracy over ~2k samples.
 
 The LLM strategies need the `sentiment` extra (`uv pip install -e ".[sentiment]"`) and an
 `ANTHROPIC_API_KEY`. **Without a key they degrade gracefully** — a deterministic mock keeps

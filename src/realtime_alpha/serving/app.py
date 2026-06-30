@@ -60,7 +60,7 @@ DEFAULT_SYMBOLS = ["BTCUSDT", "ETHUSDT"]
 # momentum (zero-cost baseline) + the TradingAgents-derived strategies. The LLM-backed
 # ones (sentiment_llm, ensemble, deep_analysis) light up when ANTHROPIC_API_KEY is set;
 # key-less they emit zero-confidence predictions (via the deterministic mock client).
-DEFAULT_STRATEGIES = ["momentum", "sentiment_llm", "ensemble", "deep_analysis"]
+DEFAULT_STRATEGIES = ["momentum", "sentiment_llm", "ensemble", "deep_analysis", "ml_model"]
 DEFAULT_FEATURE_CFG = {"ema_fast": 12, "ema_slow": 26, "rsi_period": 14, "vol_window": 20}
 
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 from . import (  # noqa: F401  -- import for @register side effect
     deep_analysis,
     ensemble,
+    ml_model,
     momentum,
     sentiment_llm,
 )
