@@ -121,7 +121,9 @@ async def _maybe_store() -> Any:
         print("[store] connected to Postgres -> durable leaderboard", flush=True)
         return store
     except Exception as exc:  # noqa: BLE001 - persistence is best-effort
-        print(f"[store] connect failed ({type(exc).__name__}: {exc}) -> in-memory", flush=True)
+        # Log only the exception TYPE — the message can contain the DSN (password) and
+        # Render logs are observable. The type alone distinguishes auth vs DNS vs timeout.
+        print(f"[store] connect failed ({type(exc).__name__}) -> in-memory", flush=True)
         return None
 
 
