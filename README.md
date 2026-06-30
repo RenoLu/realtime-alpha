@@ -6,8 +6,11 @@ that forecast the next-horizon move, and — the part most demos skip — **cont
 its own predictions against what actually happened**, so the dashboard shows a live
 leaderboard of which strategy is most accurate *right now*, on real data.
 
-> Status: in active development. Built end-to-end from real-time ingestion through online
-> evaluation and deployment (AWS via Terraform; an always-on Fly.io demo mirror).
+### ▶ Live demo: **https://realtime-alpha.onrender.com**
+
+Real Binance.US data, a trained LightGBM model (`ml_model`) competing with a momentum
+baseline on the self-grading leaderboard. Free tier — the first load after idle takes
+~30–60s to wake and warm up. (AWS-via-Terraform mirror in [`infra/aws/`](infra/aws).)
 
 ## Architecture
 
