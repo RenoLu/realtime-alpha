@@ -37,6 +37,8 @@ def test_analyze_symbol_runs_bounded_chain_and_parses_verdict():
     assert view.confidence == pytest.approx(0.62)
     assert view.horizon_s == 3600 and view.ts == 1700
     assert "deep view" in view.briefing_md
+    assert "confidence" not in view.briefing_md  # trailing JSON verdict stripped from narrative
+    assert "{" not in view.briefing_md.split("deep view")[-1]
     assert len(calls) == 4  # 3 quick analyst reads + 1 deep synthesis -> bounded cost
 
 

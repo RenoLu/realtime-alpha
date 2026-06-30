@@ -9,6 +9,7 @@ analyst/researcher prompts; the orchestration is ours (no LangGraph).
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from ..core import DeepView, SentimentSnapshot
@@ -108,6 +109,11 @@ def analyze_symbol(
         confidence=confidence,
         horizon_s=horizon_s,
         ts=ts,
-        briefing_md=briefing.strip(),
+        briefing_md=_narrative(briefing),
         model_ver=model_ver,
     )
+
+
+def _narrative(briefing: str) -> str:
+    """The human-readable briefing, with the trailing JSON verdict line removed."""
+    return re.sub(r"\s*\{[^{}]*\}\s*$", "", briefing).strip()

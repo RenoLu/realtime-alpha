@@ -1,4 +1,5 @@
-import type { SymbolState } from "../types";
+import type { BriefingMsg, SymbolState } from "../types";
+import { Markdown } from "./Markdown";
 import { Sparkline } from "./Sparkline";
 
 function fmtPrice(p: number): string {
@@ -66,19 +67,26 @@ const STANCE_STYLE: Record<string, string> = {
   neutral: "bg-slate-500/15 text-slate-300 ring-slate-500/30",
 };
 
-function Briefing({ b }: { b: import("../types").BriefingMsg }) {
+function Briefing({ b }: { b: BriefingMsg }) {
   const style = STANCE_STYLE[b.stance] ?? STANCE_STYLE.neutral;
+  // The model authors a markdown narrative; the mock backend leaves it empty / a JSON stub.
+  const md = b.briefing_md.trim();
+  const hasNarrative = md.length > 0 && !md.startsWith("{");
   return (
-    <details className="mt-4 border-t border-slate-800 pt-3">
-      <summary className="flex cursor-pointer list-none items-center justify-between text-sm">
-        <span className="text-slate-400">deep analysis</span>
+    <details open className="mt-4 border-t border-slate-800 pt-3">
+      <summary className="mb-2 flex cursor-pointer list-none items-center justify-between text-sm">
+        <span className="font-medium text-slate-300">AI analysis</span>
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase ring-1 ${style}`}>
           {b.stance}
         </span>
       </summary>
-      <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-slate-400">
-        {b.briefing_md}
-      </p>
+      {hasNarrative ? (
+        <Markdown text={b.briefing_md} />
+      ) : (
+        <p className="text-xs text-slate-600">
+          No narrative yet (mock model — run with RTA_MODEL=agent or add API credit).
+        </p>
+      )}
     </details>
   );
 }
