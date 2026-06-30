@@ -26,6 +26,9 @@ ml = ["numpy>=1.26", "polars>=1.0", "scikit-learn>=1.5", "lightgbm>=4.5"]
 # Vendored news/social-sentiment connectors (from TradingAgents, Apache-2.0) + the LLM
 # strategies' deps. Only the sentiment poller / deep scheduler need these.
 sentiment = ["yfinance>=1.4", "stockstats>=0.6", "python-dateutil>=2.9", "requests>=2.32", "pandas>=2.2"]
+# Durable data layer: Parquet lakehouse on R2 (polars writes, boto3 uploads, DuckDB
+# queries) + operational Postgres (asyncpg). All env-gated; the core stays stdlib-only.
+lakehouse = ["polars>=1.0", "duckdb>=1.1", "boto3>=1.35", "asyncpg>=0.30"]
 dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.7"]
 
 [project.scripts]

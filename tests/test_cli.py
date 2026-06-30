@@ -35,3 +35,13 @@ def test_evaluate_parser_defaults():
     args = build_parser().parse_args(["evaluate"])
     assert args.command == "evaluate"
     assert args.brokers == "localhost:9092"
+
+
+def test_sink_parser_defaults():
+    args = build_parser().parse_args(["sink"])
+    assert args.command == "sink" and args.brokers == "localhost:9092"
+
+
+def test_backtest_parser_defaults():
+    args = build_parser().parse_args(["backtest"])
+    assert args.command == "backtest" and args.root is None

@@ -9,6 +9,7 @@ re-fire until the strategy recovers above the floor).
 from __future__ import annotations
 
 from collections import defaultdict, deque
+from collections.abc import Iterable
 
 from ..core import Alert, Outcome, StrategyStat
 from .metrics import calibration_gap, directional_accuracy, mae, mean_confidence
@@ -33,6 +34,11 @@ class Leaderboard:
     def add(self, outcome: Outcome) -> Alert | None:
         self._by_strategy[outcome.strategy_id].append(outcome)
         return self._check_degradation(outcome.strategy_id, outcome.scored_ts)
+
+    def seed(self, outcomes: Iterable[Outcome]) -> None:
+        """Rebuild the rolling windows from persisted outcomes (oldest-first) on startup."""
+        for outcome in outcomes:
+            self.add(outcome)  # alerts during a cold rebuild are intentionally ignored
 
     def _check_degradation(self, strategy_id: str, ts: int) -> Alert | None:
         outs = self._by_strategy[strategy_id]

@@ -67,8 +67,20 @@ services:
     command: realtime-alpha serve --host 0.0.0.0 --port 8000
     environment:
       RTA_BROKERS: redpanda:9092
+      RTA_DATABASE_URL: ${RTA_DATABASE_URL:-}  # set => durable leaderboard (rebuilt on restart)
     ports:
       - "8000:8000"
+
+  # Lakehouse sink: features/predictions/outcomes -> Parquet on R2 (free egress). Runs only
+  # when R2 creds are set (else it exits); the always-on demo costs ~$0.
+  sink:
+    <<: *app
+    command: realtime-alpha sink --brokers redpanda:9092
+    environment:
+      RTA_R2_ENDPOINT: ${RTA_R2_ENDPOINT:-}
+      RTA_R2_BUCKET: ${RTA_R2_BUCKET:-}
+      RTA_R2_ACCESS_KEY_ID: ${RTA_R2_ACCESS_KEY_ID:-}
+      RTA_R2_SECRET_ACCESS_KEY: ${RTA_R2_SECRET_ACCESS_KEY:-}
 
   # Social-sentiment poller and off-path deep-analysis chain, run as standalone services
   # (real StockTwits/Reddit; Claude when ANTHROPIC_API_KEY is set, else a deterministic

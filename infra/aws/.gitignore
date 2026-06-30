@@ -1,0 +1,6 @@
+# Terraform working files — never committed. The .terraform.lock.hcl IS tracked.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log

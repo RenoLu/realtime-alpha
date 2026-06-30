@@ -48,3 +48,11 @@ def test_no_alert_below_min_samples():
     lb = Leaderboard(min_samples=10, degrade_floor=0.9)
     alerts = [lb.add(_out("x", hit=False)) for _ in range(5)]
     assert all(a is None for a in alerts)
+
+
+def test_seed_rebuilds_standings_from_outcomes():
+    lb = Leaderboard(min_samples=1)
+    lb.seed([_out("momentum", hit=True), _out("momentum", hit=False), _out("ensemble", hit=True)])
+    by = {x.strategy_id: x for x in lb.standings()}
+    assert by["momentum"].n == 2 and by["momentum"].dir_acc == 0.5
+    assert by["ensemble"].dir_acc == 1.0

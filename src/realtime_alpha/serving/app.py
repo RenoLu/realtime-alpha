@@ -95,6 +95,25 @@ def _make_news_fetch() -> Any:
     return fetch
 
 
+def _build_lakehouse_writer() -> Any:
+    """An R2 Parquet writer if R2 creds are set, else None (lakehouse archive disabled)."""
+    if not os.getenv("RTA_R2_BUCKET"):
+        return None  # cheap gate so we don't import the lakehouse extra when it's off
+    from ..lakehouse import writer_from_env
+
+    return writer_from_env()
+
+
+async def _maybe_store() -> Any:
+    """An initialized OutcomeStore if RTA_DATABASE_URL is set, else None (DB disabled)."""
+    dsn = os.getenv("RTA_DATABASE_URL")
+    if not dsn:
+        return None
+    from ..db import OutcomeStore
+
+    return await OutcomeStore.connect(dsn)
+
+
 def _frontend_dist() -> Path | None:
     """The built React dashboard, if present (else the app serves the inline page)."""
     override = os.getenv("RTA_FRONTEND_DIST")
@@ -124,6 +143,7 @@ def create_app(
         app.state.manager = ConnectionManager()
         app.state.tasks = []
         app.state.bus = None
+        app.state.store = None
         brokers = os.getenv("RTA_BROKERS")
         if start_pipeline and brokers:
             # Kafka mode: ingestion/processor/predictor are separate services; serving
@@ -133,10 +153,17 @@ def create_app(
             bus = KafkaBus(brokers)
             app.state.bus = bus
             leaderboard = Leaderboard()
+            store = await _maybe_store()
+            if store is not None:
+                leaderboard.seed(await store.recent_outcomes())  # durable rebuild on restart
+            app.state.store = store
             app.state.leaderboard = leaderboard
+            # The lakehouse sink runs as its own `sink` service in this topology.
             app.state.tasks = [
                 asyncio.create_task(broadcast_predictions(bus, app.state.manager)),
-                asyncio.create_task(run_leaderboard_feed(bus, app.state.manager, leaderboard)),
+                asyncio.create_task(
+                    run_leaderboard_feed(bus, app.state.manager, leaderboard, store=store)
+                ),
             ]
         elif start_pipeline:
             # Embedded mode: run the whole pipeline in-process over the in-memory bus,
@@ -165,6 +192,11 @@ def create_app(
             deep_interval = float(os.getenv("RTA_DEEP_INTERVAL", "3600"))
             manager = app.state.manager
             leaderboard = Leaderboard()
+            store = await _maybe_store()
+            if store is not None:
+                leaderboard.seed(await store.recent_outcomes())  # durable rebuild on restart
+            app.state.store = store
+            lakehouse_writer = _build_lakehouse_writer()
             app.state.deep_cache = deep_cache  # so a new WS connection can replay briefings
             app.state.leaderboard = leaderboard  # ditto for the standings + /api/leaderboard
             briefing_tasks: set[asyncio.Task] = set()
@@ -195,13 +227,23 @@ def create_app(
                 asyncio.create_task(run_predictor(bus, strategy_ids, ctx_provider=ctx_provider)),
                 asyncio.create_task(broadcast_predictions(bus, app.state.manager)),
                 asyncio.create_task(run_evaluator(bus)),
-                asyncio.create_task(run_leaderboard_feed(bus, manager, leaderboard)),
+                asyncio.create_task(
+                    run_leaderboard_feed(bus, manager, leaderboard, store=store)
+                ),
             ]
+            if lakehouse_writer is not None:
+                from ..lakehouse import run_lakehouse_sink
+
+                app.state.tasks.append(
+                    asyncio.create_task(run_lakehouse_sink(bus, lakehouse_writer))
+                )
         try:
             yield
         finally:
             for task in app.state.tasks:
                 task.cancel()
+            if app.state.store is not None:
+                await app.state.store.close()
             if app.state.bus is not None and hasattr(app.state.bus, "close"):
                 await app.state.bus.close()
 

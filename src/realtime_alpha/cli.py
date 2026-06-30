@@ -60,6 +60,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate.add_argument("--brokers", default="localhost:9092")
 
+    sink = sub.add_parser(
+        "sink", help="Persist features/predictions/outcomes to the R2 Parquet lakehouse (Kafka service)."
+    )
+    sink.add_argument("--brokers", default="localhost:9092")
+
+    backtest = sub.add_parser(
+        "backtest", help="Directional accuracy by strategy over the lakehouse history (DuckDB)."
+    )
+    backtest.add_argument("--root", default=None, help="lakehouse root (default: s3://$RTA_R2_BUCKET)")
+
     return parser
 
 
@@ -77,6 +87,10 @@ def main(argv: list[str] | None = None) -> None:
         _deep(args)
     elif args.command == "evaluate":
         _evaluate(args)
+    elif args.command == "sink":
+        _sink(args)
+    elif args.command == "backtest":
+        _backtest(args)
 
 
 def _evaluate(args: argparse.Namespace) -> None:
@@ -84,6 +98,32 @@ def _evaluate(args: argparse.Namespace) -> None:
     from .evaluation import run_evaluator
 
     asyncio.run(run_evaluator(KafkaBus(args.brokers, group_id="evaluator")))
+
+
+def _sink(args: argparse.Namespace) -> None:
+    from .bus.kafka import KafkaBus
+    from .lakehouse import run_lakehouse_sink, writer_from_env
+
+    writer = writer_from_env()
+    if writer is None:
+        raise SystemExit(
+            "lakehouse sink needs RTA_R2_ENDPOINT / RTA_R2_BUCKET / RTA_R2_ACCESS_KEY_ID / "
+            "RTA_R2_SECRET_ACCESS_KEY"
+        )
+    asyncio.run(run_lakehouse_sink(KafkaBus(args.brokers, group_id="sink"), writer))
+
+
+def _backtest(args: argparse.Namespace) -> None:
+    from .lakehouse import accuracy_by_strategy, connect, r2_config_from_env
+
+    root = args.root or (f"s3://{os.environ['RTA_R2_BUCKET']}" if os.getenv("RTA_R2_BUCKET") else None)
+    if root is None:
+        raise SystemExit("pass --root <dir|s3://bucket> or set RTA_R2_BUCKET")
+    r2 = r2_config_from_env() if root.startswith("s3://") else None
+    rows = accuracy_by_strategy(connect(r2=r2), root)
+    print(f"{'strategy':16s} {'dir_acc':>8s} {'mae':>9s} {'n':>7s}")
+    for r in rows:
+        print(f"{r['strategy_id']:16s} {r['dir_acc'] * 100:7.1f}% {r['mae'] * 100:8.3f}% {r['n']:7d}")
 
 
 def _symbols(arg: str) -> list[str]:

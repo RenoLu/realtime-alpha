@@ -116,6 +116,25 @@ not a cherry-picked backtest. It surfaces on the dashboard scoreboard, over the 
 (`{type:"leaderboard"}`), and at `GET /api/leaderboard`; a strategy that drops below the
 accuracy floor raises an alert. Standalone evaluator service: `realtime-alpha evaluate`.
 
+### Data layer (durable, ~$0)
+
+Persistence is a three-tier, cost-first design — all of it **optional and env-gated** (no
+creds ⇒ the app runs purely in-memory as before):
+
+- **Hot** — the bus (in-process MemoryBus, or one Redpanda container). No managed cost.
+- **Warm** — **Neon** Postgres (free tier): outcomes + leaderboard snapshots + a model
+  registry. Set `RTA_DATABASE_URL` and the leaderboard **survives restarts** (rebuilt from
+  the store on startup via `Leaderboard.seed`).
+- **Cold** — a Parquet **lakehouse** on **Cloudflare R2** (S3-compatible, free egress),
+  written by `realtime-alpha sink`, queried by **DuckDB**:
+  `realtime-alpha backtest` prints directional accuracy by strategy over the full history
+  (the same store M2's training will read). Set the `RTA_R2_*` vars to enable.
+
+The data is tiny (~155–260 bytes/record), so this stays at **$0/mo** on free tiers. The
+identical Parquet layout writes to S3 too: [`infra/aws/`](infra/aws) is a Terraform mirror
+(S3 + Iceberg/Glue + Athena) — **validated in CI, applied only on demand** to demo the AWS
+architecture, then destroyed. See [`.env.example`](.env.example) for all config.
+
 ### Run the full streaming stack (Docker)
 
 The production topology: Redpanda + four services (ingestion → Bytewax processor →
